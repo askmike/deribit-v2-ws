@@ -46,7 +46,7 @@ const init = (key, secret) => {
 
     if(request) {
       payload.requestedAt = request.requestedAt;
-      payload.receiveddAt = +new Date;
+      payload.receivedAt = +new Date;
       request.onDone(payload);
     }
   };
