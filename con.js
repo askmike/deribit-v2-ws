@@ -89,8 +89,10 @@ const authenticate = (key, secret) => {
 // traverse inflight queue FIFO
 const find = code => {
   for(let i = 0; i < inflightQueue.length; i++) {
-    if(code === inflightQueue[i].id) {
-      return inflightQueue[i];
+    const req = inflightQueue[i];
+    if(code === req.id) {
+      inflightQueue.splice(i, 1);
+      return req;
     }
   }
 }
@@ -105,7 +107,6 @@ const request = (path, params) => {
   if(!isAuthed) {
     throw new Error('Not authenticated.');
   }
-
 
   return authedHook.then(() => {
     let onDone;
