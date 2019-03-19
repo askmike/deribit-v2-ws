@@ -13,17 +13,29 @@ const MESSAGE_MAP = message => {
   return _MESSAGE_MAP[message];
 }
 
-let token;
-let refreshToken;
-
+let isConnected = false;
 let connected;
 let connectedHook = new Promise(r => connected = r);
 
-let inflightQueue = [];
+let token;
+let refreshToken;
 
+let isAuthed = false;
+let authed;
+let authedHook = new Promise(r => authed = r);
+
+let inflightQueue = [];
 let ws;
-const init = (key, secret) => {
+
+const connect = () => {
   ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
+  ws.onopen = () => {
+    isConnected = true;
+    connected();
+  }
+
+  ws.onerror = e => console.error(e);
+
   ws.onmessage = e => {
     let payload;
 
@@ -33,12 +45,12 @@ const init = (key, secret) => {
       console.error('deribit send bad json', e);
     }
 
-    // console.log(new Date, 'received:', payload);
-
     if(payload.id === MESSAGE_MAP('public/auth')) {
       token = payload.result.access_token;
       refreshToken = payload.result.refresh_token;
-      connected();
+
+      isAuthed = true;
+      authed();
       return;
     }
 
@@ -50,19 +62,28 @@ const init = (key, secret) => {
       request.onDone(payload);
     }
   };
-  ws.onopen = () => {
-    send({
-      jsonrpc: "2.0",
-      id: MESSAGE_MAP('public/auth'),
-      method: "public/auth",
-      params: {
-        grant_type: "client_credentials",
-        client_id: key,
-        client_secret: secret
-      }
-    });
-  };
-  ws.onerror = e => console.error(e);
+
+  return connectedHook;
+}
+
+const authenticate = (key, secret) => {
+
+  if(!isConnected) {
+    throw new Error('Not connected.');
+  }
+
+  send({
+    jsonrpc: "2.0",
+    id: MESSAGE_MAP('public/auth'),
+    method: "public/auth",
+    params: {
+      grant_type: "client_credentials",
+      client_id: key,
+      client_secret: secret
+    }
+  });
+
+  return authedHook;
 }
 
 // traverse inflight queue FIFO
@@ -80,7 +101,13 @@ const send = payload => {
 }
 
 const request = (path, params) => {
-  return connectedHook.then(() => {
+
+  if(!isAuthed) {
+    throw new Error('Not authenticated.');
+  }
+
+
+  return authedHook.then(() => {
     let onDone;
     const p = new Promise(r => onDone = r);
 
@@ -106,5 +133,6 @@ const request = (path, params) => {
 }
 
 
-module.exports.init = init;
+module.exports.connect = connect;
+module.exports.authenticate = authenticate;
 module.exports.request = request;

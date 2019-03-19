@@ -1,4 +1,5 @@
 const con = require('./con');
 
-module.exports.init = con.init;
+module.exports.connect = con.connect;
+module.exports.authenticate = con.authenticate;
 module.exports.request = con.request;

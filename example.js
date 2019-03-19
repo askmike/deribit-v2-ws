@@ -1,12 +1,14 @@
-const lib = require('./index');
+const deribit = require('./index');
 
 const key = 'x';
 const secret = 'y';
 
 (async () => {
 
-  lib.init(key, secret);
-  const resp = await lib.request('private/get_position', {instrument_name: 'BTC-PERPETUAL'});
-
-  console.log(resp);
+  await deribit.connect();
+  console.log('connected');
+  await deribit.authenticate(key, secret);
+  console.log('authenticated');
+  const resp = await deribit.request('private/get_position', {instrument_name: 'BTC-PERPETUAL'});
+  console.log('requested position:', resp);
 })()

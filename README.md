@@ -6,6 +6,9 @@ Deribit V2 API WS RPC wrapper.
 
 Work in progress/not finished!
 
+Since we use a websocket requests & responses are coming over a single bus, this lib matches
+responses with previous requests based on message type id & FIFO request order.
+
 ## Example usage
 
     const deribit = require('deribit-v2-ws');
@@ -13,8 +16,9 @@ Work in progress/not finished!
     const key = 'x';
     const secret = 'y';
 
-    lib.init(key, secret);
-    const position = await lib.request(
+    await deribit.connect();
+    await deribit.authenticate(key, secret);
+    const position = await deribit.request(
       'private/get_position',
       {instrument_name: 'BTC-PERPETUAL'}
     );
