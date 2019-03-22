@@ -1,29 +1,22 @@
 const WebSocket = require('ws');
 
-const _MESSAGE_MAP = require('./messageMap.json');
-const MESSAGE_MAP = message => {
-  if(!_MESSAGE_MAP[message]) {
-    throw new Error('Unknown path ' + message);
-  }
-
-  return _MESSAGE_MAP[message];
-}
-
 let isConnected = false;
-let connected;
-let connectedHook = new Promise(r => connected = r);
+let isAuthed = false;
 
 let token;
 let refreshToken;
 
-let isAuthed = false;
-let authed;
-let authedHook = new Promise(r => authed = r);
-
 let inflightQueue = [];
 let ws;
 
+let id = +new Date;
+let nextId = () => ++id;
+
 const connect = () => {
+
+  let connected;
+  const connectedHook = new Promise(r => connected = r);
+
   ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
   ws.onopen = () => {
     isConnected = true;
@@ -41,16 +34,11 @@ const connect = () => {
       console.error('deribit send bad json', e);
     }
 
-    if(payload.id === MESSAGE_MAP('public/auth')) {
-      token = payload.result.access_token;
-      refreshToken = payload.result.refresh_token;
+    const request = findRequest(payload.id);
 
-      isAuthed = true;
-      authed();
-      return;
+    if(!request) {
+      console.error('received response to request not send:', payload);
     }
-
-    const request = find(payload.id);
 
     if(request) {
       payload.requestedAt = request.requestedAt;
@@ -68,34 +56,45 @@ const authenticate = (key, secret) => {
     throw new Error('Not connected.');
   }
 
-  send({
+  return sendMessage({
     jsonrpc: "2.0",
-    id: MESSAGE_MAP('public/auth'),
     method: "public/auth",
+    id: nextId(),
     params: {
       grant_type: "client_credentials",
       client_id: key,
       client_secret: secret
     }
+  }).then(() => {
+    isAuthed = true;
   });
-
-  return authedHook;
 }
 
-// traverse inflight queue FIFO
-const find = code => {
+const findRequest = id => {
   for(let i = 0; i < inflightQueue.length; i++) {
     const req = inflightQueue[i];
-    if(code === req.id) {
+    if(id === req.id) {
       inflightQueue.splice(i, 1);
       return req;
     }
   }
 }
 
-const send = payload => {
+const sendMessage = payload => {
   // console.log(new Date, 'send:', payload);
+
+  let onDone;
+  const p = new Promise(r => onDone = r);
+
+  inflightQueue.push({
+    requestedAt: +new Date,
+    id: payload.id,
+    onDone
+  });
+
   ws.send(JSON.stringify(payload));
+
+  return p;
 }
 
 const request = (path, params) => {
@@ -104,31 +103,20 @@ const request = (path, params) => {
     throw new Error('Not authenticated.');
   }
 
-  return authedHook.then(() => {
-    let onDone;
-    const p = new Promise(r => onDone = r);
+  const message = {
+    jsonrpc: '2.0',
+    method: path,
+    params,
+    id: nextId()
+  }
 
-    const id = MESSAGE_MAP(path);
-
-    const message = {
-      jsonrpc: '2.0',
-      id,
-      method: path,
-      params
-    }
-
-    inflightQueue.push({
-      // message,
-      requestedAt: +new Date,
-      id,
-      onDone
-    });
-    send(message);
-
-    return p;
-  });
+  return sendMessage(message);
 }
 
+process
+  .on('unhandledRejection', (reason, p) => {
+    console.error(reason, 'Unhandled Rejection at Promise', p);
+  })
 
 module.exports.connect = connect;
 module.exports.authenticate = authenticate;
