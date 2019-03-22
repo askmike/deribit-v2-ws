@@ -1,0 +1,8 @@
+{
+  "public/auth": 9929,
+  "private/buy": 5275,
+  "private/get_position": 404,
+  "private/logout": 42,
+  "public/set_heartbeat": 9098,
+  
+}

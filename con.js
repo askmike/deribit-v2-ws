@@ -1,13 +1,9 @@
 const WebSocket = require('ws');
 
-const _MESSAGE_MAP = {
-  'public/auth': 9929,
-  'private/buy': 5275,
-  'private/get_position': 404
-};
+const _MESSAGE_MAP = require('./messageMap.json');
 const MESSAGE_MAP = message => {
   if(!_MESSAGE_MAP[message]) {
-    throw new Error('unknown message ' + message);
+    throw new Error('Unknown path ' + message);
   }
 
   return _MESSAGE_MAP[message];
