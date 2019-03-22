@@ -8,6 +8,8 @@ Work in progress/not finished!
 
 ## Example usage
 
+See more examples in `example.js`.
+
     const deribit = require('deribit-v2-ws');
 
     const key = 'x';
