@@ -12,6 +12,8 @@ let ws;
 let id = +new Date;
 let nextId = () => ++id;
 
+let channelHandlers = {};
+
 const connect = () => {
 
   let connected;
@@ -32,6 +34,18 @@ const connect = () => {
       payload = JSON.parse(e.data);
     } catch(e) {
       console.error('deribit send bad json', e);
+    }
+
+    if(payload.method === 'subscription') {
+      const fn = channelHandlers[payload.params.channel];
+
+      if(fn) {
+        fn(payload.params.data);
+      } else {
+        console.log(new Date, 'received subscription update for non subscribed event');
+      }
+
+      return;
     }
 
     const request = findRequest(payload.id);
@@ -127,6 +141,16 @@ const sendMessage = payload => {
   return p;
 }
 
+module.exports.connect = connect;
+module.exports.authenticate = authenticate;
+
+process
+  .on('unhandledRejection', (reason, p) => {
+    console.error(reason, 'Unhandled Rejection at Promise', p);
+  })
+
+// API:
+
 const request = (path, params) => {
 
   if(!isAuthed) {
@@ -142,12 +166,30 @@ const request = (path, params) => {
 
   return sendMessage(message);
 }
-
-process
-  .on('unhandledRejection', (reason, p) => {
-    console.error(reason, 'Unhandled Rejection at Promise', p);
-  })
-
-module.exports.connect = connect;
-module.exports.authenticate = authenticate;
 module.exports.request = request;
+
+const subscribe = (type, channel, handler) => {
+
+  if(!isAuthed) {
+    throw new Error('Not authenticated.');
+  }
+
+  if(channelHandlers[channel]) {
+    throw new Error('Already subscribed.');
+  }
+
+  const message = {
+    jsonrpc: '2.0',
+    method: `${type}/subscribe`,
+    params: {
+      channels: [ channel ]
+    },
+    id: nextId()
+  }
+
+  channelHandlers[channel] = handler;
+
+  return sendMessage(message);
+}
+module.exports.subscribe = subscribe;
+

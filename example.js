@@ -9,6 +9,17 @@ const secret = 'y';
   console.log(new Date, 'connected');
   await deribit.authenticate(key, secret);
   console.log(new Date, 'authenticated');
-  const resp = await deribit.request('private/get_position', {instrument_name: 'BTC-PERPETUAL'});
-  console.log(new Date, 'position:', resp);
+
+
+  const resp = await deribit.request(
+    'private/get_position',
+    {instrument_name: 'BTC-PERPETUAL'}
+  );
+  console.log('position:', resp);
+
+  const resp = await deribit.subscribe(
+    'public',
+    'deribit_price_index.btc_usd',
+    e => console.log('update', e)
+  );
 })()
