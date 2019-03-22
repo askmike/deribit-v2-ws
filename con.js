@@ -57,16 +57,46 @@ const authenticate = (key, secret) => {
   }
 
   return sendMessage({
-    jsonrpc: "2.0",
-    method: "public/auth",
+    jsonrpc: '2.0',
+    method: 'public/auth',
     id: nextId(),
     params: {
-      grant_type: "client_credentials",
+      grant_type: 'client_credentials',
       client_id: key,
       client_secret: secret
     }
-  }).then(() => {
+  }).then(resp => {
+    token = resp.result.access_token;
+    refreshToken = resp.result.refresh_token;
     isAuthed = true;
+
+    if(!resp.result.expires_in) {
+      return new Error('Deribit did not provide expiry details');
+    }
+
+    setTimeout(refresh, resp.result.expires_in - 10 * 60 * 1000);
+  });
+}
+
+const refresh = () => {
+  return sendMessage({
+    jsonrpc: '2.0',
+    method: 'public/auth',
+    id: nextId(),
+    params: {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken
+    }
+  }).then(resp => {
+    token = resp.result.access_token;
+    refreshToken = resp.result.refresh_token;
+
+    if(!resp.result.expires_in) {
+      return new Error('Deribit did not provide expiry details');
+    }
+
+    setTimeout(refresh, resp.result.expires_in - 10 * 60 * 1000);
+
   });
 }
 
