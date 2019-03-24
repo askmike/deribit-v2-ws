@@ -14,15 +14,25 @@ let nextId = () => ++id;
 
 let channelHandlers = {};
 
-const connect = () => {
+let connected;
+const connectedHook = new Promise(r => connected = r);
+module.exports.connectedHook = connectedHook;
 
-  let connected;
-  const connectedHook = new Promise(r => connected = r);
+const connect = () => {
 
   ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
   ws.onopen = () => {
     isConnected = true;
     connected();
+
+    return sendMessage({
+      jsonrpc: '2.0',
+      method: 'public/set_heartbeat',
+      id: nextId(),
+      params: {
+        interval: 30
+      }
+    });
   }
 
   ws.onerror = e => console.error(e);
@@ -46,6 +56,15 @@ const connect = () => {
       }
 
       return;
+    }
+
+    if(payload.method === 'heartbeat') {
+      return sendMessage({
+        jsonrpc: '2.0',
+        method: 'public/test',
+        id: nextId(),
+        params: {}
+      }).then(() => {});
     }
 
     const request = findRequest(payload.id);
@@ -124,17 +143,20 @@ const findRequest = id => {
   }
 }
 
-const sendMessage = payload => {
+const sendMessage = (payload, fireAndForget) => {
   // console.log(new Date, 'send:', payload);
 
-  let onDone;
-  const p = new Promise(r => onDone = r);
+  let p;
+  if(!fireAndForget) {
+    let onDone;
+    p = new Promise(r => onDone = r);
 
-  inflightQueue.push({
-    requestedAt: +new Date,
-    id: payload.id,
-    onDone
-  });
+    inflightQueue.push({
+      requestedAt: +new Date,
+      id: payload.id,
+      onDone
+    });
+  }
 
   ws.send(JSON.stringify(payload));
 
@@ -170,7 +192,9 @@ module.exports.request = request;
 
 const subscribe = (type, channel, handler) => {
 
-  if(!isAuthed) {
+  if(!isConnected) {
+    throw new Error('Not connected.');
+  } else if(type === 'private' && !isAuthed) {
     throw new Error('Not authenticated.');
   }
 
@@ -192,4 +216,3 @@ const subscribe = (type, channel, handler) => {
   return sendMessage(message);
 }
 module.exports.subscribe = subscribe;
-
