@@ -6,6 +6,9 @@ let isAuthed = false;
 let token;
 let refreshToken;
 
+let _key;
+let _secret;
+
 let inflightQueue = [];
 let ws;
 
@@ -18,12 +21,30 @@ let connected;
 const connectedHook = new Promise(r => connected = r);
 module.exports.connectedHook = connectedHook;
 
+let reconnecting = false;
+let reconnectHook;
+let reconnect;
+
 const connect = () => {
 
   ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
   ws.onopen = () => {
-    isConnected = true;
-    connected();
+    if(reconnecting) {
+
+      if(_key) {
+        authenticate(_key, _secret)
+          .then(() => {
+            reconnect();
+            reconnecting = false;
+          });
+      }
+
+
+    } else {
+      // initial connection
+      connected();
+      isConnected = true;
+    }
 
     return sendMessage({
       jsonrpc: '2.0',
@@ -35,7 +56,16 @@ const connect = () => {
     });
   }
 
-  ws.onerror = e => console.error(e);
+  ws.onerror = e => {
+    console.log(new Date, 'DERI ERROR1', e);
+  }
+
+  ws.onclose = e => {
+    console.log(new Date, 'DERIBIT CLOSED CON');
+    reconnecting = true;
+    reconnectHook = new Promise(r => reconnect = r);
+    connect();
+  }
 
   ws.onmessage = e => {
     let payload;
@@ -84,6 +114,9 @@ const connect = () => {
 }
 
 const authenticate = (key, secret) => {
+
+  _key = key;
+  _secret = secret;
 
   if(!isConnected) {
     throw new Error('Not connected.');
@@ -158,7 +191,13 @@ const sendMessage = (payload, fireAndForget) => {
     });
   }
 
-  ws.send(JSON.stringify(payload));
+  if(reconnecting) {
+    reconnectHook.then(() => {
+      ws.send(JSON.stringify(payload));
+    })
+  } else {
+    ws.send(JSON.stringify(payload));
+  }
 
   return p;
 }
