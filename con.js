@@ -18,9 +18,9 @@ let connected;
 const connectedHook = new Promise(r => connected = r);
 module.exports.connectedHook = connectedHook;
 
-const connect = () => {
+const connect = (testnet = false) => {
 
-  ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
+  ws = new WebSocket(testnet ? 'wss://test.deribit.com/ws/api/v2' : 'wss://www.deribit.com/ws/api/v2');
   ws.onopen = () => {
     isConnected = true;
     connected();
