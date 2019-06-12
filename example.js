@@ -1,25 +1,29 @@
-const deribit = require('./index');
+const Deribit = require('./');
 
 const key = 'x';
 const secret = 'y';
 
 (async () => {
 
-  await deribit.connect();
+  const db = new Deribit({key, secret});
+
+  console.log(new Date, 'connecting...');
+
+  await db.connect();
   console.log(new Date, 'connected');
-  await deribit.authenticate(key, secret);
-  console.log(new Date, 'authenticated');
+  
 
-
-  const resp = await deribit.request(
+  const resp = await db.request(
     'private/get_position',
     {instrument_name: 'BTC-PERPETUAL'}
   );
+
   console.log('position:', resp);
 
-  const resp = await deribit.subscribe(
+  await db.subscribe(
     'public',
-    'deribit_price_index.btc_usd',
-    e => console.log('update', e)
+    'deribit_price_index.btc_usd'
   );
+
+  db.on('deribit_price_index.btc_usd', console.log);
 })()

@@ -1,73 +1,128 @@
 const WebSocket = require('ws');
+const EventEmitter = require('events');
 
-let isConnected = false;
-let isAuthed = false;
+const wait = n => new Promise(r => setTimeout(r, n));
 
-let token;
-let refreshToken;
+class Connection extends EventEmitter {
+  constructor({key, secret, domain = 'www.deribit.com'}) {
+    super();
 
-let _key;
-let _secret;
+    this.key = key;
+    this.secret = secret;
+    this.WSdomain = domain;
 
-let inflightQueue = [];
-let ws;
+    this.connected = false;
+    this.authenticated = false;
+    this.reconnecting = false;
+    this.afterReconnect;
 
-let id = +new Date;
-let nextId = () => ++id;
+    this.inflightQueue = [];
 
-let channelHandlers = {};
+    this.id = +new Date;
+  }
 
-let connected;
-const connectedHook = new Promise(r => connected = r);
-module.exports.connectedHook = connectedHook;
+  nextId() {
+    return ++this.id;
+  }
 
-let reconnecting = false;
-let reconnectHook;
-let reconnect;
-
-const connect = () => {
-
-  ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
-  ws.onopen = () => {
-    if(reconnecting) {
-
-      if(_key) {
-        authenticate(_key, _secret)
-          .then(() => {
-            reconnect();
-            reconnecting = false;
-          });
-      }
-
-
-    } else {
-      // initial connection
-      connected();
-      isConnected = true;
+  _connect() {
+    if(this.connected) {
+      return;
     }
 
-    return sendMessage({
-      jsonrpc: '2.0',
-      method: 'public/set_heartbeat',
-      id: nextId(),
-      params: {
-        interval: 30
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(`wss://${this.WSdomain}/ws/api/v2`);
+      this.ws.onmessage = this.handleWSMessage;
+      this.ws.onopen = () => {
+        this.connected = true
+        resolve();
+      }
+      this.ws.onerror = e => {
+        console.log(new Date, 'DERI ERROR', e);
+      }
+
+      this.ws.onclose = async e => {
+        console.log(new Date, 'DERIBIT CLOSED CON');
+        this.reconnecting = true;
+        this.authenticated = false;
+        this.connected = false;
+
+        let hook;
+        this.afterReconnect = new Promise(r => hook = r);
+        await wait(500);
+        console.log(new Date, 'DERIBIT RECONNECTING...');
+        await this.connect();
+        hook();
       }
     });
   }
 
-  ws.onerror = e => {
-    console.log(new Date, 'DERI ERROR1', e);
+  connect = async () => {
+    await this._connect();
+    if(this.key) {
+      await this.authenticate();
+    }
   }
 
-  ws.onclose = e => {
-    console.log(new Date, 'DERIBIT CLOSED CON');
-    reconnecting = true;
-    reconnectHook = new Promise(r => reconnect = r);
-    connect();
+  authenticate = async () => {
+    if(!this.connected) {
+      await this.connect();
+    }
+
+    const resp = await this.sendMessage({
+      jsonrpc: '2.0',
+      method: 'public/auth',
+      id: this.nextId(),
+      params: {
+        grant_type: 'client_credentials',
+        client_id: this.key,
+        client_secret: this.secret
+      }
+    });
+
+    this.token = resp.result.access_token;
+    this.refreshToken = resp.result.refresh_token;
+    this.authenticated = true;
+
+    if(!resp.result.expires_in) {
+      throw new Error('Deribit did not provide expiry details');
+    }
+
+    setTimeout(this.refreshTokenFn, resp.result.expires_in - 10 * 60 * 1000);
   }
 
-  ws.onmessage = e => {
+  refreshTokenFn = async () => {
+    const resp = await sendMessage({
+      jsonrpc: '2.0',
+      method: 'public/auth',
+      id: this.nextId(),
+      params: {
+        grant_type: 'refresh_token',
+        refresh_token: this.refreshToken
+      }
+    });
+
+    this.token = resp.result.access_token;
+    this.refreshToken = resp.result.refresh_token;
+
+    if(!resp.result.expires_in) {
+      throw new Error('Deribit did not provide expiry details');
+    }
+
+    setTimeout(this.refreshTokenFn, resp.result.expires_in - 10 * 60 * 1000);
+  }
+
+  findRequest(id) {
+    for(let i = 0; i < this.inflightQueue.length; i++) {
+      const req = this.inflightQueue[i];
+      if(id === req.id) {
+        this.inflightQueue.splice(i, 1);
+        return req;
+      }
+    }
+  }
+
+  handleWSMessage = e => {
     let payload;
 
     try {
@@ -77,181 +132,100 @@ const connect = () => {
     }
 
     if(payload.method === 'subscription') {
-      const fn = channelHandlers[payload.params.channel];
-
-      if(fn) {
-        fn(payload.params.data);
-      } else {
-        console.log(new Date, 'received subscription update for non subscribed event');
-      }
-
-      return;
+      return this.emit(payload.params.channel, payload.params.data);
     }
 
     if(payload.method === 'heartbeat') {
-      return sendMessage({
+      return this.sendMessage({
         jsonrpc: '2.0',
         method: 'public/test',
-        id: nextId(),
+        id: this.nextId(),
         params: {}
-      }).then(() => {});
+      })
     }
 
-    const request = findRequest(payload.id);
+    const request = this.findRequest(payload.id);
 
     if(!request) {
-      console.error('received response to request not send:', payload);
+      return console.error('received response to request not send:', payload);
     }
 
-    if(request) {
-      payload.requestedAt = request.requestedAt;
-      payload.receivedAt = +new Date;
-      request.onDone(payload);
-    }
-  };
-
-  return connectedHook;
-}
-
-const authenticate = (key, secret) => {
-
-  _key = key;
-  _secret = secret;
-
-  if(!isConnected) {
-    throw new Error('Not connected.');
+    payload.requestedAt = request.requestedAt;
+    payload.receivedAt = +new Date;
+    request.onDone(payload);
   }
 
-  return sendMessage({
-    jsonrpc: '2.0',
-    method: 'public/auth',
-    id: nextId(),
-    params: {
-      grant_type: 'client_credentials',
-      client_id: key,
-      client_secret: secret
-    }
-  }).then(resp => {
-    token = resp.result.access_token;
-    refreshToken = resp.result.refresh_token;
-    isAuthed = true;
+  sendMessage = async (payload, fireAndForget) => {
+    if(!this.connected) {
+      if(!this.reconnecting) {
+        throw new Error('Not connected.')
+      }
 
-    if(!resp.result.expires_in) {
-      return new Error('Deribit did not provide expiry details');
+      await this.afterReconnect();
     }
 
-    setTimeout(refresh, resp.result.expires_in - 10 * 60 * 1000);
-  });
-}
+    let p;
+    if(!fireAndForget) {
+      let onDone;
+      p = new Promise(r => onDone = r);
 
-const refresh = () => {
-  return sendMessage({
-    jsonrpc: '2.0',
-    method: 'public/auth',
-    id: nextId(),
-    params: {
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
-    }
-  }).then(resp => {
-    token = resp.result.access_token;
-    refreshToken = resp.result.refresh_token;
-
-    if(!resp.result.expires_in) {
-      return new Error('Deribit did not provide expiry details');
+      this.inflightQueue.push({
+        requestedAt: +new Date,
+        id: payload.id,
+        onDone
+      });
     }
 
-    setTimeout(refresh, resp.result.expires_in - 10 * 60 * 1000);
+    this.ws.send(JSON.stringify(payload));
 
-  });
-}
+    return p;
+  }
 
-const findRequest = id => {
-  for(let i = 0; i < inflightQueue.length; i++) {
-    const req = inflightQueue[i];
-    if(id === req.id) {
-      inflightQueue.splice(i, 1);
-      return req;
+
+  request = async (path, params) => {
+
+    if(!this.connected) {
+
+      if(!this.reconnecting) {
+        throw new Error('Not connected.');
+      }
+
+      await this.afterReconnect();
     }
+
+    if(!this.authenticated) {
+      throw new Error('Not authenticated.');
+    }
+
+    const message = {
+      jsonrpc: '2.0',
+      method: path,
+      params,
+      id: this.nextId()
+    }
+
+    return this.sendMessage(message);
+  }
+
+  subscribe = (type, channel) => {
+
+    if(!this.connected) {
+      throw new Error('Not connected.');
+    } else if(type === 'private' && !this.authenticated) {
+      throw new Error('Not authenticated.');
+    }
+
+    const message = {
+      jsonrpc: '2.0',
+      method: `${type}/subscribe`,
+      params: {
+        channels: [ channel ]
+      },
+      id: this.nextId()
+    }
+
+    return this.sendMessage(message);
   }
 }
 
-const sendMessage = (payload, fireAndForget) => {
-  // console.log(new Date, 'send:', payload);
-
-  let p;
-  if(!fireAndForget) {
-    let onDone;
-    p = new Promise(r => onDone = r);
-
-    inflightQueue.push({
-      requestedAt: +new Date,
-      id: payload.id,
-      onDone
-    });
-  }
-
-  if(reconnecting) {
-    reconnectHook.then(() => {
-      ws.send(JSON.stringify(payload));
-    })
-  } else {
-    ws.send(JSON.stringify(payload));
-  }
-
-  return p;
-}
-
-module.exports.connect = connect;
-module.exports.authenticate = authenticate;
-
-process
-  .on('unhandledRejection', (reason, p) => {
-    console.error(reason, 'Unhandled Rejection at Promise', p);
-  })
-
-// API:
-
-const request = (path, params) => {
-
-  if(!isAuthed) {
-    throw new Error('Not authenticated.');
-  }
-
-  const message = {
-    jsonrpc: '2.0',
-    method: path,
-    params,
-    id: nextId()
-  }
-
-  return sendMessage(message);
-}
-module.exports.request = request;
-
-const subscribe = (type, channel, handler) => {
-
-  if(!isConnected) {
-    throw new Error('Not connected.');
-  } else if(type === 'private' && !isAuthed) {
-    throw new Error('Not authenticated.');
-  }
-
-  if(channelHandlers[channel]) {
-    throw new Error('Already subscribed.');
-  }
-
-  const message = {
-    jsonrpc: '2.0',
-    method: `${type}/subscribe`,
-    params: {
-      channels: [ channel ]
-    },
-    id: nextId()
-  }
-
-  channelHandlers[channel] = handler;
-
-  return sendMessage(message);
-}
-module.exports.subscribe = subscribe;
+module.exports = Connection;
