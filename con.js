@@ -185,7 +185,6 @@ class Connection extends EventEmitter {
   request = async (path, params) => {
 
     if(!this.connected) {
-
       if(!this.reconnecting) {
         throw new Error('Not connected.');
       }
