@@ -61,3 +61,5 @@ typings/
 .next
 
 priv*
+
+.DS_Store

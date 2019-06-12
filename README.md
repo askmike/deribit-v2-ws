@@ -10,14 +10,13 @@ Work in progress/not finished!
 
 See more examples in `example.js`.
 
-    const deribit = require('deribit-v2-ws');
+    const Deribit = require('deribit-v2-ws');
 
     const key = 'x';
     const secret = 'y';
 
-    await deribit.connect();
-    await deribit.authenticate(key, secret);
-    const position = await deribit.request(
+    const db = new Deribit({key, secret})
+    const position = await db.request(
       'private/get_position',
       {instrument_name: 'BTC-PERPETUAL'}
     );
