@@ -12,6 +12,8 @@ class Connection extends EventEmitter {
     this.WSdomain = domain;
 
     this.connected = false;
+    this.isReadyHook = false;
+    this.isReady = new Promise((r => this.isReadyHook = r));
     this.authenticated = false;
     this.reconnecting = false;
     this.afterReconnect;
@@ -33,8 +35,10 @@ class Connection extends EventEmitter {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(`wss://${this.WSdomain}/ws/api/v2`);
       this.ws.onmessage = this.handleWSMessage;
+
       this.ws.onopen = () => {
-        this.connected = true
+        this.connected = true;
+        this.isReadyHook();
         resolve();
       }
       this.ws.onerror = e => {
@@ -49,10 +53,12 @@ class Connection extends EventEmitter {
 
         let hook;
         this.afterReconnect = new Promise(r => hook = r);
+        this.isReady = new Promise((r => this.isReadyHook = r));
         await wait(500);
         console.log(new Date, 'DERIBIT RECONNECTING...');
         await this.connect();
         hook();
+        this.isReadyHook();
       }
     });
   }
