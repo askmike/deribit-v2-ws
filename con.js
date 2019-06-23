@@ -39,20 +39,41 @@ class Connection extends EventEmitter {
 
       this.ws.onopen = () => {
         this.connected = true;
+
+        this.pingInterval = setInterval(this.ping, 20 * 1000);
+
         this.isReadyHook();
         resolve();
       }
       this.ws.onerror = e => {
-        console.log(new Date, 'DERI ERROR', e);
+        console.log(new Date, '[DERIBIT] DERI ERROR', e);
       }
 
       this.ws.onclose = async e => {
-        console.log(new Date, 'DERIBIT CLOSED CON');
+        console.log(new Date, '[DERIBIT] CLOSED CON');
         this.authenticated = false;
         this.connected = false;
+        clearInterval(this.pingInterval);
         this.reconnect();
       }
     });
+  }
+
+  ping = async() => {
+    let start = new Date;
+    const timeout = setTimeout(() => {
+      console.log(new Date, '[DERIBIT] NO PING RESPONSE');
+      this.terminate();
+    }, 10000)
+    await this.request('/public/test');
+    clearInterval(timeout);
+  }
+
+  terminate = async() => {
+    console.log(new Date, '[DERIBIT] TERMINATED WS CON');
+    this.ws.terminate();
+    this.authenticated = false;
+    this.connected = false;
   }
 
   reconnect = async () => {
@@ -62,7 +83,7 @@ class Connection extends EventEmitter {
     this.afterReconnect = new Promise(r => hook = r);
     this.isReady = new Promise((r => this.isReadyHook = r));
     await wait(500);
-    console.log(new Date, 'DERIBIT RECONNECTING...');
+    console.log(new Date, '[DERIBIT] RECONNECTING...');
     await this.connect();
     hook();
     this.isReadyHook();
@@ -107,7 +128,7 @@ class Connection extends EventEmitter {
   }
 
   refreshTokenFn = async () => {
-    const resp = await sendMessage({
+    const resp = await this.sendMessage({
       jsonrpc: '2.0',
       method: 'public/auth',
       id: this.nextId(),
