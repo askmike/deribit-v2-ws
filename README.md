@@ -6,6 +6,13 @@ Deribit V2 API WS RPC wrapper.
 
 Work in progress/not finished!
 
+## Features
+
+- Connect to WS api
+- Authenticate
+- Reconnect on disconnect
+- Resubscribe subscriptions on disconnect
+
 ## Example usage
 
 See more examples in `example.js`.

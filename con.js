@@ -19,6 +19,7 @@ class Connection extends EventEmitter {
     this.afterReconnect;
 
     this.inflightQueue = [];
+    this.subscriptions = [];
 
     this.id = +new Date;
   }
@@ -47,19 +48,27 @@ class Connection extends EventEmitter {
 
       this.ws.onclose = async e => {
         console.log(new Date, 'DERIBIT CLOSED CON');
-        this.reconnecting = true;
         this.authenticated = false;
         this.connected = false;
-
-        let hook;
-        this.afterReconnect = new Promise(r => hook = r);
-        this.isReady = new Promise((r => this.isReadyHook = r));
-        await wait(500);
-        console.log(new Date, 'DERIBIT RECONNECTING...');
-        await this.connect();
-        hook();
-        this.isReadyHook();
+        this.reconnect();
       }
+    });
+  }
+
+  reconnect = async () => {
+    this.reconnecting = true;
+
+    let hook;
+    this.afterReconnect = new Promise(r => hook = r);
+    this.isReady = new Promise((r => this.isReadyHook = r));
+    await wait(500);
+    console.log(new Date, 'DERIBIT RECONNECTING...');
+    await this.connect();
+    hook();
+    this.isReadyHook();
+
+    this.subscriptions.forEach(sub => {
+      this.subscribe(sub.type, sub.channel);
     });
   }
 
@@ -213,6 +222,8 @@ class Connection extends EventEmitter {
   }
 
   subscribe = (type, channel) => {
+
+    this.subscriptions.push({type, channel});
 
     if(!this.connected) {
       throw new Error('Not connected.');
