@@ -63,3 +63,6 @@ typings/
 priv*
 
 .DS_Store
+
+# Babel build folder
+build/*
