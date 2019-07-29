@@ -1,6 +1,6 @@
 {
   "name": "deribit-v2-ws",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "deribit v2 ws api wrapper",
   "main": "index.js",
   "scripts": {
