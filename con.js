@@ -197,7 +197,7 @@ class Connection extends EventEmitter {
         throw new Error('Not connected.')
       }
 
-      await this.afterReconnect();
+      await this.afterReconnect;
     }
 
     let p;
