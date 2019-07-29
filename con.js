@@ -228,8 +228,10 @@ class Connection extends EventEmitter {
       await this.afterReconnect();
     }
 
-    if(!this.authenticated) {
-      throw new Error('Not authenticated.');
+    if (path.startsWith('private')) {
+      if(!this.authenticated) {
+        throw new Error('Not authenticated.');
+      }
     }
 
     const message = {
