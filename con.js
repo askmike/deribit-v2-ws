@@ -65,7 +65,7 @@ class Connection extends EventEmitter {
       console.log(new Date, '[DERIBIT] NO PING RESPONSE');
       this.terminate();
     }, 10000)
-    await this.request('/public/test');
+    await this.request('public/test');
     clearInterval(timeout);
   }
 
