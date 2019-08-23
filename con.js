@@ -28,6 +28,10 @@ class Connection extends EventEmitter {
     return ++this.id;
   }
 
+  handleError = (e) => {
+    console.log(new Date, '[DERIBIT] DERI ERROR', e);
+  }
+
   _connect() {
     if(this.connected) {
       return;
@@ -45,9 +49,8 @@ class Connection extends EventEmitter {
         this.isReadyHook();
         resolve();
       }
-      this.ws.onerror = e => {
-        console.log(new Date, '[DERIBIT] DERI ERROR', e);
-      }
+      this.ws.onerror = this.handleError;
+      this.ws.on('error', this.handleError)
 
       this.ws.onclose = async e => {
         console.log(new Date, '[DERIBIT] CLOSED CON');
@@ -115,6 +118,10 @@ class Connection extends EventEmitter {
         client_secret: this.secret
       }
     });
+
+    if(resp.error) {
+      throw new Error(resp.error.message);
+    }
 
     this.token = resp.result.access_token;
     this.refreshToken = resp.result.refresh_token;
