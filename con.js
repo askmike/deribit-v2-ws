@@ -54,6 +54,10 @@ class Connection extends EventEmitter {
 
       this.ws.onclose = async e => {
         console.log(new Date, '[DERIBIT] CLOSED CON');
+        this.inflightQueue.forEach((queueElement) => {
+          queueElement.connectionAborted(new Error('Deribit connection closed.'));
+        });
+        this.inflightQueue = [];
         this.authenticated = false;
         this.connected = false;
         clearInterval(this.pingInterval);
@@ -210,12 +214,14 @@ class Connection extends EventEmitter {
     let p;
     if(!fireAndForget) {
       let onDone;
-      p = new Promise(r => onDone = r);
+      let connectionAborted;
+      p = new Promise((r, rj) => {onDone = r; connectionAborted = rj;});
 
       this.inflightQueue.push({
         requestedAt: +new Date,
         id: payload.id,
-        onDone
+        onDone,
+        connectionAborted
       });
     }
 
