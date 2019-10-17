@@ -76,11 +76,22 @@ class Connection extends EventEmitter {
     clearInterval(timeout);
   }
 
+  // terminate a connection and immediatly try to reconnect
   terminate = async() => {
     console.log(new Date, '[DERIBIT] TERMINATED WS CON');
     this.ws.terminate();
     this.authenticated = false;
     this.connected = false;
+  }
+
+  // end a connection
+  end = () => {
+    console.log(new Date, '[DERIBIT] ENDED WS CON');
+    clearInterval(this.pingInterval);
+    this.ws.onclose = undefined
+    this.authenticated = false;
+    this.connected = false;
+    this.ws.terminate();
   }
 
   reconnect = async () => {
