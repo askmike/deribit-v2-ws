@@ -1,1 +1,1 @@
-module.exports = require('./con');
+module.exports = require('./connection');
