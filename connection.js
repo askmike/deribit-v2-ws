@@ -4,7 +4,8 @@ const EventEmitter = require('events');
 const wait = n => new Promise(r => setTimeout(r, n));
 
 class Connection extends EventEmitter {
-  constructor({key, secret, domain = 'www.deribit.com'}) {
+  constructor({key, secret, domain}) {
+    if(domain==null){domain = 'www.deribit.com'}
     super();
 
     this.key = key;
