@@ -5,8 +5,11 @@ const wait = n => new Promise(r => setTimeout(r, n));
 
 class Connection extends EventEmitter {
   constructor({key, secret, domain}) {
-    if(domain==null){domain = 'www.deribit.com'}
     super();
+
+    if(!domain){
+      domain = 'www.deribit.com'
+    }
 
     this.key = key;
     this.secret = secret;
