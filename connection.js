@@ -50,6 +50,7 @@ class Connection extends EventEmitter {
 
         this.pingInterval = setInterval(this.ping, 20 * 1000);
 
+        this.emit('statusChange', 'connected');
         this.isReadyHook();
         resolve();
       }
@@ -57,6 +58,7 @@ class Connection extends EventEmitter {
       this.ws.on('error', this.handleError)
 
       this.ws.onclose = async e => {
+        this.emit('statusChange', 'closed');
         console.log(new Date, '[DERIBIT] CLOSED CON');
         this.inflightQueue.forEach((queueElement) => {
           queueElement.connectionAborted(new Error('Deribit connection closed.'));
@@ -239,6 +241,7 @@ class Connection extends EventEmitter {
         connectionAborted
       });
     }
+
 
     this.ws.send(JSON.stringify(payload));
 
