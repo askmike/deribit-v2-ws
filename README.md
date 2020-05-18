@@ -23,6 +23,7 @@ See more examples in `example.js`.
     const secret = 'y';
 
     const db = new Deribit({key, secret})
+    await db.connect();
     const position = await db.request(
       'private/get_position',
       {instrument_name: 'BTC-PERPETUAL'}
