@@ -277,7 +277,7 @@ class Connection extends EventEmitter {
 
   subscribe = (type, channel) => {
 
-    if(this.subscriptions.find(s => s.type == type && s.channel == channel) === undefined)
+    if(!this.subscriptions.find(s => s.type == type && s.channel == channel))
       this.subscriptions.push({type, channel});
 
     if(!this.connected) {
