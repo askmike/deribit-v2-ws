@@ -4,7 +4,7 @@ Deribit V2 API WS RPC wrapper.
 
 [Docs are here](https://docs.deribit.com/v2/?javascript#deribit-api-v2-0-0).
 
-Work in progress/not finished!
+This module is designed to be used with nodejs, it doesn't support browser usage.
 
 ## Features
 
