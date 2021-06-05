@@ -23,6 +23,6 @@
   },
   "homepage": "https://github.com/askmike/deribit-v2-ws#readme",
   "dependencies": {
-    "ws": "^6.2.0"
+    "ws": "^7.4.6"
   }
 }
