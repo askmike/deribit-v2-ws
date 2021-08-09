@@ -51,13 +51,13 @@ class Connection extends EventEmitter {
         this.pingInterval = setInterval(this.ping, 20 * 1000);
 
         this.emit('statusChange', 'connected');
-        this.isReadyHook();
         resolve();
       }
       this.ws.onerror = this.handleError;
       this.ws.on('error', this.handleError)
 
       this.ws.onclose = async e => {
+        this.isReady = new Promise((r => this.isReadyHook = r));
         this.emit('statusChange', 'closed');
         console.log(new Date, '[DERIBIT] CLOSED CON');
         this.inflightQueue.forEach((queueElement) => {
@@ -68,6 +68,7 @@ class Connection extends EventEmitter {
         this.connected = false;
         clearInterval(this.pingInterval);
         this.reconnect();
+        this.isReadyHook();
       }
     });
   }
@@ -94,7 +95,7 @@ class Connection extends EventEmitter {
   end = () => {
     console.log(new Date, '[DERIBIT] ENDED WS CON');
     clearInterval(this.pingInterval);
-    this.ws.onclose = undefined
+    this.ws.onclose = undefined;
     this.authenticated = false;
     this.connected = false;
     this.ws.terminate();
@@ -105,7 +106,6 @@ class Connection extends EventEmitter {
 
     let hook;
     this.afterReconnect = new Promise(r => hook = r);
-    this.isReady = new Promise((r => this.isReadyHook = r));
     await wait(500);
     console.log(new Date, '[DERIBIT] RECONNECTING...');
     await this.connect();
@@ -115,6 +115,7 @@ class Connection extends EventEmitter {
     this.subscriptions.forEach(sub => {
       this.subscribe(sub.type, sub.channel);
     });
+    this.reconnecting = false;
   }
 
   connect = async () => {
